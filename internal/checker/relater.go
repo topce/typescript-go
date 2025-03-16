@@ -1452,13 +1452,22 @@ func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature,
 	if checkMode&SignatureCheckModeStrictTopSignature != 0 && c.isTopSignature(source) && !c.isTopSignature(target) {
 		return TernaryFalse
 	}
+	sourceCount := c.getParameterCount(source)
 	targetCount := c.getParameterCount(target)
 	var sourceHasMoreParameters bool
+	var targetHasMoreParameters bool
 	if !c.hasEffectiveRestParameter(target) {
 		if checkMode&SignatureCheckModeStrictArity != 0 {
 			sourceHasMoreParameters = c.hasEffectiveRestParameter(source) || c.getParameterCount(source) > targetCount
 		} else {
 			sourceHasMoreParameters = c.getMinArgumentCount(source) > targetCount
+		}
+	}
+	if !c.hasEffectiveRestParameter(source) {
+		if checkMode&SignatureCheckModeStrictArity != 0 {
+			targetHasMoreParameters = c.getParameterCount(target) > sourceCount && c.getMinArgumentCount(target) > c.getMinArgumentCount(source)
+		} else {
+			targetHasMoreParameters = c.getMinArgumentCount(target) > sourceCount
 		}
 	}
 	if sourceHasMoreParameters {
@@ -1469,11 +1478,16 @@ func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature,
 		}
 		return TernaryFalse
 	}
+	if targetHasMoreParameters {
+		if reportErrors && (checkMode&SignatureCheckModeStrictArity == 0) {
+			errorReporter(diagnostics.Source_signature_provides_too_few_arguments_Expected_0_or_more_but_got_1, c.getMinArgumentCount(target), sourceCount)
+		}
+		return TernaryFalse
+	}
 	if source.typeParameters != nil && !core.Same(source.typeParameters, target.typeParameters) {
 		target = c.getCanonicalSignature(target)
 		source = c.instantiateSignatureInContextOf(source, target /*inferenceContext*/, nil, compareTypes)
 	}
-	sourceCount := c.getParameterCount(source)
 	sourceRestType := c.getNonArrayRestType(source)
 	targetRestType := c.getNonArrayRestType(target)
 	if sourceRestType != nil || targetRestType != nil {
