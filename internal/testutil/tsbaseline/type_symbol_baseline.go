@@ -71,6 +71,7 @@ func DoTypeAndSymbolBaseline(
 
 			return sb.String()[:sb.Len()-1]
 		}
+		typesOpts.IsSubmoduleAccepted = len(program.UnsupportedExtensions()) != 0 // TODO(jakebailey): read submoduleAccepted.txt
 
 		checkBaselines(t, baselinePath, allFiles, fullWalker, header, typesOpts, false /*isSymbolBaseline*/)
 	})
@@ -322,7 +323,7 @@ func (walker *typeWriterWalker) writeTypeOrSymbol(node *ast.Node, isSymbolWalk b
 		// Exception for `T` in `type T = something` because that may evaluate to some interesting type.
 		if ast.IsPartOfTypeNode(node) ||
 			ast.IsIdentifier(node) &&
-				(ast.GetMeaningFromDeclaration(node)&ast.SemanticMeaningValue) == 0 &&
+				(ast.GetMeaningFromDeclaration(node.Parent)&ast.SemanticMeaningValue) == 0 &&
 				!(ast.IsTypeAliasDeclaration(node.Parent) && node == node.Parent.Name()) {
 			return nil
 		}

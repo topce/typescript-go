@@ -721,8 +721,8 @@ type Checker struct {
 	lastGetCombinedNodeFlagsResult             ast.NodeFlags
 	lastGetCombinedModifierFlagsNode           *ast.Node
 	lastGetCombinedModifierFlagsResult         ast.ModifierFlags
-	inferenceStates                            []InferenceState
-	flowStates                                 []FlowState
+	freeinferenceState                         *InferenceState
+	freeFlowState                              *FlowState
 	flowLoopCache                              map[FlowLoopKey]*Type
 	flowLoopStack                              []FlowLoopInfo
 	sharedFlows                                []SharedFlow
@@ -741,7 +741,7 @@ type Checker struct {
 	reverseMappedSourceStack                   []*Type
 	reverseMappedTargetStack                   []*Type
 	reverseExpandingFlags                      ExpandingFlags
-	relaters                                   []Relater
+	freeRelater                                *Relater
 	subtypeRelation                            *Relation
 	strictSubtypeRelation                      *Relation
 	assignableRelation                         *Relation
@@ -791,6 +791,7 @@ type Checker struct {
 	getGlobalClassMethodDecoratorContextType   func() *Type
 	getGlobalClassGetterDecoratorContextType   func() *Type
 	getGlobalClassSetterDecoratorContextType   func() *Type
+	getGlobalClassAccessorDecoratorContxtType  func() *Type
 	getGlobalClassAccessorDecoratorContextType func() *Type
 	getGlobalClassAccessorDecoratorTargetType  func() *Type
 	getGlobalClassAccessorDecoratorResultType  func() *Type
@@ -2171,6 +2172,8 @@ func (c *Checker) checkSourceElementWorker(node *ast.Node) {
 		c.checkTypeAliasDeclaration(node)
 	case ast.KindEnumDeclaration:
 		c.checkEnumDeclaration(node)
+	case ast.KindEnumMember:
+		c.checkEnumMember(node)
 	case ast.KindModuleDeclaration:
 		c.checkModuleDeclaration(node)
 	case ast.KindImportDeclaration:
@@ -4270,7 +4273,7 @@ basePropertyCheck:
 	for errorNode, memberInfo := range notImplementedInfo {
 		switch {
 		case len(memberInfo.missedProperties) == 1:
-			missedProperty := "'" + memberInfo.missedProperties[0] + "'"
+			missedProperty := memberInfo.missedProperties[0]
 			if ast.IsClassExpression(errorNode) {
 				c.error(errorNode, diagnostics.Non_abstract_class_expression_does_not_implement_inherited_abstract_member_0_from_class_1, missedProperty, memberInfo.baseTypeName)
 			} else {
@@ -4708,6 +4711,15 @@ func (c *Checker) checkEnumDeclaration(node *ast.Node) {
 				}
 			}
 		}
+	}
+}
+
+func (c *Checker) checkEnumMember(node *ast.Node) {
+	if ast.IsPrivateIdentifier(node.Name()) {
+		c.error(node, diagnostics.An_enum_member_cannot_be_named_with_a_private_identifier)
+	}
+	if node.Initializer() != nil {
+		c.checkExpression(node.Initializer())
 	}
 }
 
@@ -7059,7 +7071,7 @@ func (c *Checker) checkExpressionWorker(node *ast.Node, checkMode CheckMode) *Ty
 		c.checkGrammarBigIntLiteral(node.AsBigIntLiteral())
 		return c.getFreshTypeOfLiteralType(c.getBigIntLiteralType(jsnum.PseudoBigInt{
 			Negative:    false,
-			Base10Value: parsePseudoBigInt(node.Text()),
+			Base10Value: jsnum.ParsePseudoBigInt(node.Text()),
 		}))
 	case ast.KindTrueKeyword:
 		return c.trueType
@@ -8025,7 +8037,7 @@ func (c *Checker) isConstructorAccessible(node *ast.Node, signature *Signature) 
 	declaration := signature.declaration
 	modifiers := getSelectedEffectiveModifierFlags(declaration, ast.ModifierFlagsNonPublicAccessibilityModifier)
 	// (1) Public constructors and (2) constructor functions are always accessible.
-	if modifiers == 0 || ast.IsConstructorDeclaration(declaration) {
+	if modifiers == 0 || !ast.IsConstructorDeclaration(declaration) {
 		return true
 	}
 	declaringClassDeclaration := getClassLikeDeclarationOfSymbol(declaration.Parent.Symbol())
@@ -9619,7 +9631,7 @@ func (c *Checker) isAritySmaller(signature *Signature, target *ast.Node) bool {
 		}
 		targetParameterCount++
 	}
-	if len(parameters) != 0 && parameterIsThisKeyword(parameters[0]) {
+	if len(parameters) != 0 && ast.IsThisParameter(parameters[0]) {
 		targetParameterCount--
 	}
 	return !c.hasEffectiveRestParameter(signature) && c.getParameterCount(signature) < targetParameterCount
@@ -10035,7 +10047,7 @@ func (c *Checker) checkPrefixUnaryExpression(node *ast.Node) *Type {
 		if expr.Operator == ast.KindMinusToken {
 			return c.getFreshTypeOfLiteralType(c.getBigIntLiteralType(jsnum.PseudoBigInt{
 				Negative:    true,
-				Base10Value: parsePseudoBigInt(expr.Operand.Text()),
+				Base10Value: jsnum.ParsePseudoBigInt(expr.Operand.Text()),
 			}))
 		}
 	}
@@ -10449,7 +10461,7 @@ func (c *Checker) checkPropertyAccessChain(node *ast.Node, checkMode CheckMode) 
 }
 
 func (c *Checker) checkPropertyAccessExpressionOrQualifiedName(node *ast.Node, left *ast.Node, leftType *Type, right *ast.Node, checkMode CheckMode, writeOnly bool) *Type {
-	parentSymbol := c.typeNodeLinks.Get(node).resolvedSymbol
+	parentSymbol := c.typeNodeLinks.Get(left).resolvedSymbol
 	assignmentKind := getAssignmentTargetKind(node)
 	widenedType := leftType
 	if assignmentKind != AssignmentKindNone || c.isMethodAccessForCall(node) {
@@ -11521,7 +11533,8 @@ func (c *Checker) checkBinaryLikeExpression(left *ast.Node, operatorToken *ast.N
 				ast.KindGreaterThanGreaterThanGreaterThanEqualsToken:
 				rhsEval := c.evaluate(right, right)
 				if numValue, ok := rhsEval.Value.(jsnum.Number); ok && numValue.Abs() >= 32 {
-					c.errorOrSuggestion(ast.IsEnumMember(ast.WalkUpParenthesizedExpressions(right.Parent.Parent)), errorNode, diagnostics.This_operation_can_be_simplified_This_shift_is_identical_to_0_1_2, scanner.GetTextOfNode(left), scanner.TokenToString(operator), (numValue / 32).Floor())
+					// Elevate from suggestion to error within an enum member
+					c.errorOrSuggestion(ast.IsEnumMember(ast.WalkUpParenthesizedExpressions(right.Parent.Parent)), errorNode, diagnostics.This_operation_can_be_simplified_This_shift_is_identical_to_0_1_2, scanner.GetTextOfNode(left), scanner.TokenToString(operator), numValue.Remainder(32))
 				}
 			}
 		}
@@ -12181,6 +12194,15 @@ func (c *Checker) checkInExpression(left *ast.Expression, right *ast.Expression,
 func (c *Checker) hasEmptyObjectIntersection(t *Type) bool {
 	return someType(t, func(t *Type) bool {
 		return t == c.unknownEmptyObjectType || t.flags&TypeFlagsIntersection != 0 && c.isEmptyAnonymousObjectType(c.getBaseConstraintOrType(t))
+	})
+}
+
+func (c *Checker) getExactOptionalUnassignableProperties(source *Type, target *Type) []*ast.Symbol {
+	if isTupleType(source) && isTupleType(target) {
+		return nil
+	}
+	return core.Filter(c.getPropertiesOfType(target), func(targetProp *ast.Symbol) bool {
+		return c.isExactOptionalPropertyMismatch(c.getTypeOfPropertyOfType(source, targetProp.Name), c.getTypeOfSymbol(targetProp))
 	})
 }
 
@@ -15014,7 +15036,7 @@ func (c *Checker) getTypeOfVariableOrParameterOrPropertyWorker(symbol *ast.Symbo
 	case ast.KindPropertyAssignment:
 		result = c.checkPropertyAssignment(declaration, CheckModeNormal)
 	case ast.KindShorthandPropertyAssignment:
-		result = c.checkExpressionForMutableLocation(declaration, CheckModeNormal)
+		result = c.checkExpressionForMutableLocation(declaration.Name(), CheckModeNormal)
 	case ast.KindMethodDeclaration:
 		result = c.checkObjectLiteralMethod(declaration, CheckModeNormal)
 	case ast.KindExportAssignment:
@@ -16435,7 +16457,7 @@ func (c *Checker) getWidenedTypeForAssignmentDeclaration(symbol *ast.Symbol) *Ty
 	var types []*Type
 	for _, declaration := range symbol.Declarations {
 		if ast.IsBinaryExpression(declaration) {
-			types = core.AppendIfUnique(types, c.getWidenedLiteralType(c.checkExpressionCached(declaration.AsBinaryExpression().Right)))
+			types = core.AppendIfUnique(types, c.checkExpressionForMutableLocation(declaration.AsBinaryExpression().Right, CheckModeNormal))
 		}
 	}
 	return c.getWidenedType(c.getUnionType(types))
@@ -16901,10 +16923,10 @@ func (c *Checker) tryGetNameFromType(t *Type) (name string, ok bool) {
 	case t.flags&TypeFlagsUniqueESSymbol != 0:
 		return t.AsUniqueESSymbolType().name, true
 	case t.flags&TypeFlagsStringLiteral != 0:
-		s := t.AsLiteralType().value.(string)
+		s := getStringLiteralValue(t)
 		return s, true
 	case t.flags&TypeFlagsNumberLiteral != 0:
-		s := t.AsLiteralType().value.(jsnum.Number).String()
+		s := getNumberLiteralValue(t).String()
 		return s, true
 	default:
 		return "", false
@@ -17230,7 +17252,7 @@ func (c *Checker) isApplicableIndexType(source *Type, target *Type) bool {
 	// signature applies to types assignable to 'number', `${number}` and numeric string literal types.
 	return c.isTypeAssignableTo(source, target) ||
 		target == c.stringType && c.isTypeAssignableTo(source, c.numberType) ||
-		target == c.numberType && (source == c.numericStringType || source.flags&TypeFlagsStringLiteral != 0 && isNumericLiteralName(source.AsLiteralType().value.(string)))
+		target == c.numberType && (source == c.numericStringType || source.flags&TypeFlagsStringLiteral != 0 && isNumericLiteralName(getStringLiteralValue(source)))
 }
 
 func (c *Checker) resolveStructuredTypeMembers(t *Type) *StructuredType {
@@ -17715,7 +17737,7 @@ func (c *Checker) isValidBaseType(t *Type) bool {
 			return c.isValidBaseType(constraint)
 		}
 	}
-	// TODO: Given that we allow type parmeters here now, is this `!isGenericMappedType(type)` check really needed?
+	// TODO: Given that we allow type parameters here now, is this `!isGenericMappedType(type)` check really needed?
 	// There's no reason a `T` should be allowed while a `Readonly<T>` should not.
 	return t.flags&(TypeFlagsObject|TypeFlagsNonPrimitive|TypeFlagsAny) != 0 && !c.isGenericMappedType(t) ||
 		t.flags&TypeFlagsIntersection != 0 && core.Every(t.Types(), c.isValidBaseType)
@@ -17983,7 +18005,7 @@ func (c *Checker) getSignaturesOfSymbol(symbol *ast.Symbol) []*Signature {
 			}
 		}
 		// If this is a function or method declaration, get the signature from the @type tag for the sake of optional parameters.
-		// Exclude contextually-typed kinds because we already apply the @type tag to the context, plus applying it here to the initializer would supress checks that the two are compatible.
+		// Exclude contextually-typed kinds because we already apply the @type tag to the context, plus applying it here to the initializer would suppress checks that the two are compatible.
 		result = append(result, c.getSignatureFromDeclaration(decl))
 	}
 	return result
@@ -18245,7 +18267,7 @@ func getEffectiveSetAccessorTypeAnnotationNode(node *ast.Node) *ast.Node {
 func getSetAccessorValueParameter(accessor *ast.Node) *ast.Node {
 	parameters := accessor.Parameters()
 	if len(parameters) > 0 {
-		hasThis := len(parameters) == 2 && parameterIsThisKeyword(parameters[0])
+		hasThis := len(parameters) == 2 && ast.IsThisParameter(parameters[0])
 		return parameters[core.IfElse(hasThis, 1, 0)]
 	}
 	return nil
@@ -19323,7 +19345,7 @@ func (c *Checker) combineUnionOrIntersectionMemberSignatures(left *Signature, ri
 	} else {
 		leftSignatures = []*Signature{left}
 	}
-	result.composite = &CompositeSignature{isUnion: true, signatures: append(leftSignatures, right)}
+	result.composite = &CompositeSignature{isUnion: isUnion, signatures: append(leftSignatures, right)}
 	if paramMapper != nil {
 		if left.composite != nil && left.composite.isUnion == isUnion && left.mapper != nil {
 			result.mapper = c.combineTypeMappers(left.mapper, paramMapper)
@@ -20228,7 +20250,7 @@ func (c *Checker) instantiateTypeWithAlias(t *Type, m *TypeMapper, alias *TypeAl
 	}
 	if c.instantiationDepth == 100 || c.instantiationCount >= 5_000_000 {
 		// We have reached 100 recursive type instantiations, or 5M type instantiations caused by the same statement
-		// or expression. There is a very high likelyhood we're dealing with a combination of infinite generic types
+		// or expression. There is a very high likelihood we're dealing with a combination of infinite generic types
 		// that perpetually generate new type identities, so we stop the recursion here by yielding the error type.
 		c.error(c.currentNode, diagnostics.Type_instantiation_is_excessively_deep_and_possibly_infinite)
 		return c.errorType
@@ -20451,6 +20473,20 @@ func (c *Checker) getObjectTypeInstantiation(t *Type, m *TypeMapper, alias *Type
 			result = c.instantiateAnonymousType(target, newMapper, newAlias)
 		}
 		data.instantiations[key] = result
+		if result.flags&TypeFlagsObjectFlagsType != 0 && result.objectFlags&ObjectFlagsCouldContainTypeVariablesComputed == 0 {
+			// if `result` is one of the object types we tried to make (it may not be, due to how `instantiateMappedType` works), we can carry forward the type variable containment check from the input type arguments
+			resultCouldContainObjectFlags := core.Some(typeArguments, c.couldContainTypeVariables)
+			if result.objectFlags&ObjectFlagsCouldContainTypeVariablesComputed == 0 {
+				if result.objectFlags&(ObjectFlagsMapped|ObjectFlagsAnonymous|ObjectFlagsReference) != 0 {
+					result.objectFlags |= ObjectFlagsCouldContainTypeVariablesComputed | core.IfElse(resultCouldContainObjectFlags, ObjectFlagsCouldContainTypeVariables, 0)
+				} else {
+					// If none of the type arguments for the outer type parameters contain type variables, it follows
+					// that the instantiated type doesn't reference type variables.
+					// Intrinsics have `CouldContainTypeVariablesComputed` pre-set, so this should only cover unions and intersections resulting from `instantiateMappedType`
+					result.objectFlags |= core.IfElse(!resultCouldContainObjectFlags, ObjectFlagsCouldContainTypeVariablesComputed, 0)
+				}
+			}
+		}
 	}
 	return result
 }
@@ -21885,6 +21921,7 @@ func (c *Checker) createComputedEnumType(symbol *ast.Symbol) *Type {
 	freshType := c.newLiteralType(TypeFlagsEnum, nil, regularType)
 	freshType.symbol = symbol
 	regularType.AsLiteralType().freshType = freshType
+	freshType.AsLiteralType().freshType = freshType
 	return regularType
 }
 
@@ -23270,6 +23307,20 @@ func (c *Checker) getBigIntLiteralType(value jsnum.PseudoBigInt) *Type {
 	return t
 }
 
+func (c *Checker) parseBigIntLiteralType(text string) *Type {
+	return c.getBigIntLiteralType(parseValidBigInt(text))
+}
+
+// text is a valid bigint string excluding a trailing `n`, but including a possible prefix `-`.
+// Use `isValidBigIntString(text, roundTripOnly)` before calling this function.
+func parseValidBigInt(text string) jsnum.PseudoBigInt {
+	text, negative := strings.CutPrefix(text, "-")
+	return jsnum.PseudoBigInt{
+		Negative:    negative,
+		Base10Value: jsnum.ParsePseudoBigInt(text),
+	}
+}
+
 func getStringLiteralValue(t *Type) string {
 	return t.AsLiteralType().value.(string)
 }
@@ -23507,6 +23558,9 @@ func (c *Checker) mapTypeEx(t *Type, f func(*Type) *Type, noReductions bool) *Ty
 		}
 	}
 	if changed {
+		if len(mappedTypes) == 0 {
+			return nil
+		}
 		return c.getUnionTypeEx(slices.Clone(mappedTypes), core.IfElse(noReductions, UnionReductionNone, UnionReductionLiteral), nil /*alias*/, nil /*origin*/)
 	}
 	return t
@@ -25109,6 +25163,11 @@ func (c *Checker) getSuggestionForNonexistentIndexSignature(objectType *Type, ex
 	return suggestion + "." + suggestedMethod
 }
 
+func (c *Checker) getSuggestedTypeForNonexistentStringLiteralType(source *Type, target *Type) *Type {
+	candidates := core.Filter(target.Types(), func(t *Type) bool { return t.flags&TypeFlagsStringLiteral != 0 })
+	return core.GetSpellingSuggestion(getStringLiteralValue(source), candidates, getStringLiteralValue)
+}
+
 func getIndexNodeForAccessExpression(accessNode *ast.Node) *ast.Node {
 	switch accessNode.Kind {
 	case ast.KindElementAccessExpression:
@@ -26499,8 +26558,8 @@ func (c *Checker) getDefinitelyFalsyPartOfType(t *Type) *Type {
 		return c.zeroBigIntType
 	case t == c.regularFalseType || t == c.falseType ||
 		t.flags&(TypeFlagsVoid|TypeFlagsUndefined|TypeFlagsNull|TypeFlagsAnyOrUnknown) != 0 ||
-		t.flags&TypeFlagsStringLiteral != 0 && t.AsLiteralType().value.(string) == "" ||
-		t.flags&TypeFlagsNumberLiteral != 0 && t.AsLiteralType().value.(jsnum.Number) == 0 ||
+		t.flags&TypeFlagsStringLiteral != 0 && getStringLiteralValue(t) == "" ||
+		t.flags&TypeFlagsNumberLiteral != 0 && getNumberLiteralValue(t) == 0 ||
 		t.flags&TypeFlagsBigIntLiteral != 0 && isZeroBigInt(t):
 		return t
 	}
@@ -27182,7 +27241,7 @@ func (c *Checker) getContextualTypeForBinaryOperand(node *ast.Node, contextFlags
 	case ast.KindEqualsToken, ast.KindAmpersandAmpersandEqualsToken, ast.KindBarBarEqualsToken, ast.KindQuestionQuestionEqualsToken:
 		// In an assignment expression, the right operand is contextually typed by the type of the left operand.
 		// If the binary operator has a symbol, this is an assignment declaration and there is no contextual type.
-		if node == binary.Right && binary.Symbol == nil {
+		if node == binary.Right && (binary.Symbol == nil || c.canGetContextualTypeForAssignmentDeclaration(binary.Left)) {
 			return c.getContextualTypeFromAssignmentTarget(binary.Left)
 		}
 	case ast.KindBarBarToken, ast.KindQuestionQuestionToken:
@@ -27202,6 +27261,15 @@ func (c *Checker) getContextualTypeForBinaryOperand(node *ast.Node, contextFlags
 		}
 	}
 	return nil
+}
+
+func (c *Checker) canGetContextualTypeForAssignmentDeclaration(node *ast.Node) bool {
+	// Node is the left operand of an assignment declaration (a binary expression with a symbol assigned by the
+	// binder) of the form 'F.id = expr' or 'F[xxx] = expr'. If 'F' is declared as a variable with a type annotation,
+	// we can obtain a contextual type from the annotated type without triggering a circularity. Otherwise, the
+	// assignment declaration has no contextual type.
+	symbol := c.getResolvedSymbol(node.Expression())
+	return symbol.ValueDeclaration != nil && ast.IsVariableDeclaration(symbol.ValueDeclaration) && symbol.ValueDeclaration.Type() != nil
 }
 
 func (c *Checker) getContextualTypeFromAssignmentTarget(node *ast.Node) *Type {
@@ -28296,7 +28364,7 @@ func (c *Checker) getTypeFactsWorker(t *Type, callerOnlyNeeds TypeFacts) TypeFac
 		}
 		return TypeFactsStringFacts
 	case flags&(TypeFlagsStringLiteral|TypeFlagsTemplateLiteral) != 0:
-		isEmpty := flags&TypeFlagsStringLiteral != 0 && t.AsLiteralType().value.(string) == ""
+		isEmpty := flags&TypeFlagsStringLiteral != 0 && getStringLiteralValue(t) == ""
 		if c.strictNullChecks {
 			if isEmpty {
 				return TypeFactsEmptyStringStrictFacts
@@ -28313,7 +28381,7 @@ func (c *Checker) getTypeFactsWorker(t *Type, callerOnlyNeeds TypeFacts) TypeFac
 		}
 		return TypeFactsNumberFacts
 	case flags&TypeFlagsNumberLiteral != 0:
-		isZero := t.AsLiteralType().value.(jsnum.Number) == 0
+		isZero := getNumberLiteralValue(t) == 0
 		if c.strictNullChecks {
 			if isZero {
 				return TypeFactsZeroNumberStrictFacts
@@ -28436,7 +28504,7 @@ func (c *Checker) getIntersectionTypeFacts(t *Type, callerOnlyNeeds TypeFacts) T
 }
 
 func isZeroBigInt(t *Type) bool {
-	return t.AsLiteralType().value.(jsnum.PseudoBigInt).Base10Value == "0"
+	return getBigIntLiteralValue(t).Base10Value == "0"
 }
 
 func (c *Checker) isFunctionObjectType(t *Type) bool {

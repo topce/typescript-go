@@ -330,6 +330,10 @@ func (scanner *Scanner) SetSkipJsDocLeadingAsterisks(skip bool) {
 	}
 }
 
+func (scanner *Scanner) SetSkipTrivia(skip bool) {
+	scanner.skipTrivia = skip
+}
+
 func (s *Scanner) HasUnicodeEscape() bool {
 	return s.tokenFlags&ast.TokenFlagsUnicodeEscape != 0
 }
@@ -557,7 +561,7 @@ func (s *Scanner) Scan() ast.Kind {
 			if s.charAt(1) == '/' {
 				s.pos += 2
 				for {
-					if ch := s.char(); ch <= 0x7F {
+					if ch := s.char(); ch < utf8.RuneSelf {
 						if ch < 0 || ch == '\r' || ch == '\n' {
 							break
 						}
@@ -579,7 +583,7 @@ func (s *Scanner) Scan() ast.Kind {
 				isJSDoc := s.char() == '*' && s.charAt(1) != '/'
 				for {
 					ch = s.char()
-					if ch <= 0x7F {
+					if ch < utf8.RuneSelf {
 						if ch < 0 {
 							s.error(diagnostics.Asterisk_Slash_expected)
 							break
@@ -1343,7 +1347,7 @@ func (s *Scanner) scanIdentifier(prefixLength int) bool {
 				break
 			}
 		}
-		if ch <= 0x7F && ch != '\\' {
+		if ch < utf8.RuneSelf && ch != '\\' {
 			s.tokenValue = s.text[start:s.pos]
 			return true
 		}
@@ -1512,7 +1516,7 @@ func (s *Scanner) scanEscapeSequence(flags EscapeSequenceScanningFlags) string {
 			if flags&EscapeSequenceScanningFlagsRegularExpression != 0 && flags&EscapeSequenceScanningFlagsAtomEscape == 0 && ch != '0' {
 				s.errorAt(diagnostics.Octal_escape_sequences_and_backreferences_are_not_allowed_in_a_character_class_If_this_was_intended_as_an_escape_sequence_use_the_syntax_0_instead, start, s.pos-start, fmt.Sprintf("%02x", code))
 			} else {
-				s.errorAt(diagnostics.Octal_escape_sequences_are_not_allowed_Use_the_syntax_0, start, s.pos-start, code)
+				s.errorAt(diagnostics.Octal_escape_sequences_are_not_allowed_Use_the_syntax_0, start, s.pos-start, "\\x"+fmt.Sprintf("%02x", code))
 			}
 			return string(rune(code))
 		}
@@ -1863,9 +1867,11 @@ func (s *Scanner) scanBinaryOrOctalDigits(base int32) string {
 
 func (s *Scanner) scanBigIntSuffix() ast.Kind {
 	if s.char() == 'n' {
-		s.pos++
 		s.tokenValue += "n"
-		// !!! Convert all bigint tokens to their normalized decimal representation
+		if s.tokenFlags&ast.TokenFlagsBinaryOrOctalSpecifier != 0 {
+			s.tokenValue = jsnum.ParsePseudoBigInt(s.tokenValue) + "n"
+		}
+		s.pos++
 		return ast.KindBigIntLiteral
 	}
 	s.tokenValue = jsnum.FromString(s.tokenValue).String()
@@ -1907,11 +1913,11 @@ func isWordCharacter(ch rune) bool {
 }
 
 func isIdentifierStart(ch rune, languageVersion core.ScriptTarget) bool {
-	return stringutil.IsASCIILetter(ch) || ch == '_' || ch == '$' || ch > 0x7F && isUnicodeIdentifierStart(ch, languageVersion)
+	return stringutil.IsASCIILetter(ch) || ch == '_' || ch == '$' || ch >= utf8.RuneSelf && isUnicodeIdentifierStart(ch, languageVersion)
 }
 
 func isIdentifierPart(ch rune, languageVersion core.ScriptTarget) bool {
-	return isWordCharacter(ch) || ch == '$' || ch > 0x7F && isUnicodeIdentifierPart(ch, languageVersion)
+	return isWordCharacter(ch) || ch == '$' || ch >= utf8.RuneSelf && isUnicodeIdentifierPart(ch, languageVersion)
 }
 
 func isUnicodeIdentifierStart(ch rune, languageVersion core.ScriptTarget) bool {
@@ -1960,6 +1966,16 @@ func init() {
 
 func TokenToString(token ast.Kind) string {
 	return tokenToText[token]
+}
+
+func GetViableKeywordSuggestions() []string {
+	result := make([]string, 0, len(textToKeyword))
+	for text := range textToKeyword {
+		if len(text) > 2 {
+			result = append(result, text)
+		}
+	}
+	return result
 }
 
 func couldStartTrivia(text string, pos int) bool {
