@@ -1,31 +1,22 @@
 --- old.inKeywordTypeguard(strict=true).types
 +++ new.inKeywordTypeguard(strict=true).types
-@@= skipped -0, +0 lines =@@
- //// [tests/cases/compiler/inKeywordTypeguard.ts] ////
- 
--=== Performance Stats ===
--Type Count: 1,000
--
- === inKeywordTypeguard.ts ===
- class A { a: string; }
- >A : A
-@@= skipped -444, +441 lines =@@
+@@= skipped -441, +441 lines =@@
  >window : Window & typeof globalThis
  
          window.ontouchstart
 ->window.ontouchstart : (((this: GlobalEventHandlers, ev: TouchEvent) => any) & ((this: Window, ev: TouchEvent) => any)) | null | undefined
-+>window.ontouchstart : (ev: TouchEvent) => any & (ev: TouchEvent) => any | null | undefined
++>window.ontouchstart : (this: GlobalEventHandlers, ev: TouchEvent) => any & (this: Window, ev: TouchEvent) => any | null | undefined
  >window : Window & typeof globalThis
 ->ontouchstart : (((this: GlobalEventHandlers, ev: TouchEvent) => any) & ((this: Window, ev: TouchEvent) => any)) | null | undefined
-+>ontouchstart : (ev: TouchEvent) => any & (ev: TouchEvent) => any | null | undefined
++>ontouchstart : (this: GlobalEventHandlers, ev: TouchEvent) => any & (this: Window, ev: TouchEvent) => any | null | undefined
  
      } else {
          window.ontouchstart
 ->window.ontouchstart : (((this: GlobalEventHandlers, ev: TouchEvent) => any) & ((this: Window, ev: TouchEvent) => any)) | null | undefined
-+>window.ontouchstart : (ev: TouchEvent) => any & (ev: TouchEvent) => any | null | undefined
++>window.ontouchstart : (this: GlobalEventHandlers, ev: TouchEvent) => any & (this: Window, ev: TouchEvent) => any | null | undefined
  >window : Window & typeof globalThis
 ->ontouchstart : (((this: GlobalEventHandlers, ev: TouchEvent) => any) & ((this: Window, ev: TouchEvent) => any)) | null | undefined
-+>ontouchstart : (ev: TouchEvent) => any & (ev: TouchEvent) => any | null | undefined
++>ontouchstart : (this: GlobalEventHandlers, ev: TouchEvent) => any & (this: Window, ev: TouchEvent) => any | null | undefined
      }
  }
  

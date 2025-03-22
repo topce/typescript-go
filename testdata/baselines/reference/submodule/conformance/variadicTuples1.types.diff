@@ -1,16 +1,6 @@
 --- old.variadicTuples1.types
 +++ new.variadicTuples1.types
-@@= skipped -0, +0 lines =@@
- //// [tests/cases/conformance/types/tuple/variadicTuples1.ts] ////
- 
--=== Performance Stats ===
--Type Count: 1,000
--Instantiation count: 2,500
--
- === variadicTuples1.ts ===
- // Variadics in tuple types
- 
-@@= skipped -136, +132 lines =@@
+@@= skipped -132, +132 lines =@@
  }
  
  const tc5 = concat2([1, 2, 3] as const, [4, 5, 6] as const);  // (1 | 2 | 3 | 4 | 5 | 6)[]
@@ -223,27 +213,7 @@
  >["foo", 42] : [string, number]
  >"foo" : "foo"
  >42 : 42
-@@= skipped -14, +14 lines =@@
- >args : A
- 
-     bind<T extends unknown[], U extends unknown[], R>(this: Desc<[...T, ...U], R>, ...args: T): Desc<[...U], R>;
-->bind : <T extends unknown[], U extends unknown[], R>(this: Desc<[...T, ...U], R>, ...args: T) => Desc<[...U], R>
-+>bind : <T extends unknown[], U extends unknown[], R>(...args: T) => Desc<[...U], R>
- >this : Desc<[...T, ...U], R>
- >args : T
- }
-@@= skipped -11, +11 lines =@@
- const b = a.bind("", 1);  // Desc<[boolean], object>
- >b : Desc<[boolean], object>
- >a.bind("", 1) : Desc<[boolean], object>
-->a.bind : <T extends unknown[], U extends unknown[], R>(this: Desc<[...T, ...U], R>, ...args: T) => Desc<[...U], R>
-+>a.bind : <T extends unknown[], U extends unknown[], R>(...args: T) => Desc<[...U], R>
- >a : Desc<[string, number, boolean], object>
-->bind : <T extends unknown[], U extends unknown[], R>(this: Desc<[...T, ...U], R>, ...args: T) => Desc<[...U], R>
-+>bind : <T extends unknown[], U extends unknown[], R>(...args: T) => Desc<[...U], R>
- >"" : ""
- >1 : 1
- 
+@@= skipped -34, +34 lines =@@
  // Repro from #39607
  
  declare function getUser(id: string, options?: { x?: string }): string;
@@ -276,7 +246,7 @@
  >args : [...T]
  >method(...args, {}) : U
  >method : (...args: [...T, object]) => U
-@@= skipped -38, +38 lines =@@
+@@= skipped -29, +29 lines =@@
  }
  
  callApi(getUser);

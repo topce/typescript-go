@@ -61,10 +61,23 @@ func DoTypeAndSymbolBaseline(
 			var sb strings.Builder
 			sb.Grow(len(s))
 
+			perfStats := false
 			for line := range strings.SplitSeq(s, "\n") {
 				if isTypeBaselineNodeReuseLine(line) {
 					continue
 				}
+
+				if !perfStats && strings.HasPrefix(line, "=== Performance Stats ===") {
+					perfStats = true
+					continue
+				} else if perfStats {
+					if strings.HasPrefix(line, "=== ") {
+						perfStats = false
+					} else {
+						continue
+					}
+				}
+
 				sb.WriteString(line)
 				sb.WriteString("\n")
 			}
@@ -343,7 +356,7 @@ func (walker *typeWriterWalker) writeTypeOrSymbol(node *ast.Node, isSymbolWalk b
 			!ast.IsBindingElement(node.Parent) &&
 			!ast.IsPropertyAccessOrQualifiedName(node.Parent) &&
 			!ast.IsLabelName(node) &&
-			!(ast.IsModuleDeclaration(node.Parent) && ast.IsGlobalScopeAugmentation(node.Parent)) &&
+			!ast.IsGlobalScopeAugmentation(node.Parent) &&
 			!ast.IsMetaProperty(node.Parent) &&
 			!isImportStatementName(node) &&
 			!isExportStatementName(node) &&

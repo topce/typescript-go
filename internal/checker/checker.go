@@ -2,6 +2,7 @@ package checker
 
 import (
 	"fmt"
+	"iter"
 	"maps"
 	"math"
 	"slices"
@@ -514,6 +515,7 @@ type Program interface {
 	GetEmitModuleFormatOfFile(sourceFile *ast.SourceFile) core.ModuleKind
 	GetImpliedNodeFormatForEmit(sourceFile *ast.SourceFile) core.ModuleKind
 	GetResolvedModule(currentSourceFile *ast.SourceFile, moduleReference string) *ast.SourceFile
+	GetSourceFileMetaData(path tspath.Path) *ast.SourceFileMetaData
 }
 
 type Host interface{}
@@ -531,8 +533,8 @@ type Checker struct {
 	fileIndexMap                               map[*ast.SourceFile]int
 	compareSymbols                             func(*ast.Symbol, *ast.Symbol) int
 	TypeCount                                  uint32
-	symbolCount                                uint32
-	totalInstantiationCount                    uint32
+	SymbolCount                                uint32
+	TotalInstantiationCount                    uint32
 	instantiationCount                         uint32
 	instantiationDepth                         uint32
 	inlineLevel                                int
@@ -771,6 +773,7 @@ type Checker struct {
 	getGlobalPromiseConstructorSymbol          func() *ast.Symbol
 	getGlobalPromiseConstructorSymbolOrNil     func() *ast.Symbol
 	getGlobalOmitSymbol                        func() *ast.Symbol
+	getGlobalNoInferSymbolOrNil                func() *ast.Symbol
 	getGlobalIteratorType                      func() *Type
 	getGlobalIterableType                      func() *Type
 	getGlobalIterableTypeChecked               func() *Type
@@ -982,6 +985,7 @@ func NewChecker(program Program) *Checker {
 	c.getGlobalPromiseConstructorSymbol = c.getGlobalValueSymbolResolver("Promise", true /*reportErrors*/)
 	c.getGlobalPromiseConstructorSymbolOrNil = c.getGlobalValueSymbolResolver("Promise", false /*reportErrors*/)
 	c.getGlobalOmitSymbol = c.getGlobalTypeAliasResolver("Omit", 2 /*arity*/, true /*reportErrors*/)
+	c.getGlobalNoInferSymbolOrNil = c.getGlobalTypeAliasResolver("NoInfer", 1 /*arity*/, false /*reportErrors*/)
 	c.getGlobalIteratorType = c.getGlobalTypeResolver("Iterator", 3 /*arity*/, false /*reportErrors*/)
 	c.getGlobalIterableType = c.getGlobalTypeResolver("Iterable", 3 /*arity*/, false /*reportErrors*/)
 	c.getGlobalIterableTypeChecked = c.getGlobalTypeResolver("Iterable", 3 /*arity*/, true /*reportErrors*/)
@@ -3379,7 +3383,7 @@ func (c *Checker) getEffectiveDeclarationFlags(n *ast.Node, flagsToCheck ast.Mod
 	// because those flags have no useful semantics there.
 	if !ast.IsInterfaceDeclaration(n.Parent) && !ast.IsClassDeclaration(n.Parent) && !ast.IsClassExpression(n.Parent) && n.Flags&ast.NodeFlagsAmbient != 0 {
 		container := getEnclosingContainer(n)
-		if container != nil && container.Flags&ast.NodeFlagsExportContext != 0 && flags&ast.ModifierFlagsAmbient == 0 && !(ast.IsModuleBlock(n.Parent) && ast.IsModuleDeclaration(n.Parent.Parent) && ast.IsGlobalScopeAugmentation(n.Parent.Parent)) {
+		if container != nil && container.Flags&ast.NodeFlagsExportContext != 0 && flags&ast.ModifierFlagsAmbient == 0 && !(ast.IsModuleBlock(n.Parent) && ast.IsGlobalScopeAugmentation(n.Parent.Parent)) {
 			// It is nested in an ambient export context, which means it is automatically exported
 			flags |= ast.ModifierFlagsExport
 		}
@@ -4750,7 +4754,7 @@ func (c *Checker) checkModuleDeclaration(node *ast.Node) {
 	}
 	if ast.IsIdentifier(node.Name()) {
 		c.checkCollisionsForDeclarationName(node, node.Name())
-		if node.Flags&(ast.NodeFlagsNamespace|ast.NodeFlagsGlobalAugmentation) == 0 {
+		if node.AsModuleDeclaration().Keyword == ast.KindModuleKeyword {
 			tokenRange := getNonModifierTokenRangeOfNode(node)
 			c.suggestionDiagnostics.Add(ast.NewDiagnostic(ast.GetSourceFileOfNode(node), tokenRange, diagnostics.A_namespace_declaration_should_not_be_declared_using_the_module_keyword_Please_use_the_namespace_keyword_instead))
 		}
@@ -13041,7 +13045,7 @@ func (c *Checker) hasParseDiagnostics(sourceFile *ast.SourceFile) bool {
 }
 
 func (c *Checker) newSymbol(flags ast.SymbolFlags, name string) *ast.Symbol {
-	c.symbolCount++
+	c.SymbolCount++
 	result := c.symbolPool.New()
 	result.Flags = flags | ast.SymbolFlagsTransient
 	result.Name = name
@@ -13574,7 +13578,27 @@ func (c *Checker) getTargetOfModuleDefault(moduleSymbol *ast.Symbol, node *ast.N
 }
 
 func (c *Checker) reportNonDefaultExport(moduleSymbol *ast.Symbol, node *ast.Node) {
-	// !!!
+	if moduleSymbol.Exports != nil && moduleSymbol.Exports[node.Symbol().Name] != nil {
+		c.error(node, diagnostics.Module_0_has_no_default_export_Did_you_mean_to_use_import_1_from_0_instead, c.symbolToString(moduleSymbol), c.symbolToString(node.Symbol()))
+	} else {
+		diagnostic := c.error(node.Name(), diagnostics.Module_0_has_no_default_export, c.symbolToString(moduleSymbol))
+		var exportStar *ast.Symbol
+		if moduleSymbol.Exports != nil {
+			exportStar = moduleSymbol.Exports[ast.InternalSymbolNameExportStar]
+		}
+		if exportStar != nil {
+			defaultExport := core.Find(exportStar.Declarations, func(decl *ast.Declaration) bool {
+				if !(ast.IsExportDeclaration(decl) && decl.AsExportDeclaration().ModuleSpecifier != nil) {
+					return false
+				}
+				resolvedExternalModuleName := c.resolveExternalModuleName(decl, decl.AsExportDeclaration().ModuleSpecifier, false /*ignoreErrors*/)
+				return resolvedExternalModuleName != nil && resolvedExternalModuleName.Exports[ast.InternalSymbolNameDefault] != nil
+			})
+			if defaultExport != nil {
+				diagnostic.AddRelatedInfo(createDiagnosticForNode(defaultExport, diagnostics.X_export_Asterisk_does_not_re_export_a_default))
+			}
+		}
+	}
 }
 
 func (c *Checker) resolveExportByName(moduleSymbol *ast.Symbol, name string, sourceNode *ast.Node, dontResolveAlias bool) *ast.Symbol {
@@ -13771,31 +13795,29 @@ func (c *Checker) isOnlyImportableAsDefault(usage *ast.Node, resolvedModule *ast
 }
 
 func (c *Checker) canHaveSyntheticDefault(file *ast.Node, moduleSymbol *ast.Symbol, dontResolveAlias bool, usage *ast.Node) bool {
-	// !!!
-	// var usageMode ResolutionMode
-	// if file != nil {
-	// 	usageMode = c.getEmitSyntaxForModuleSpecifierExpression(usage)
-	// }
-	// if file != nil && usageMode != core.ModuleKindNone {
-	// 	targetMode := host.getImpliedNodeFormatForEmit(file)
-	// 	if usageMode == core.ModuleKindESNext && targetMode == core.ModuleKindCommonJS && core.ModuleKindNode16 <= c.moduleKind && c.moduleKind <= core.ModuleKindNodeNext {
-	// 		// In Node.js, CommonJS modules always have a synthetic default when imported into ESM
-	// 		return true
-	// 	}
-	// 	if usageMode == core.ModuleKindESNext && targetMode == core.ModuleKindESNext {
-	// 		// No matter what the `module` setting is, if we're confident that both files
-	// 		// are ESM, there cannot be a synthetic default.
-	// 		return false
-	// 	}
-	// }
+	var usageMode core.ResolutionMode
+	if file != nil {
+		usageMode = c.getEmitSyntaxForModuleSpecifierExpression(usage)
+	}
+	if file != nil && usageMode != core.ModuleKindNone {
+		targetMode := c.program.GetImpliedNodeFormatForEmit(file.AsSourceFile())
+		if usageMode == core.ModuleKindESNext && targetMode == core.ModuleKindCommonJS && core.ModuleKindNode16 <= c.moduleKind && c.moduleKind <= core.ModuleKindNodeNext {
+			// In Node.js, CommonJS modules always have a synthetic default when imported into ESM
+			return true
+		}
+		if usageMode == core.ModuleKindESNext && targetMode == core.ModuleKindESNext {
+			// No matter what the `module` setting is, if we're confident that both files
+			// are ESM, there cannot be a synthetic default.
+			return false
+		}
+	}
 	if !c.allowSyntheticDefaultImports {
 		return false
 	}
 	// Declaration files (and ambient modules)
 	if file == nil || file.AsSourceFile().IsDeclarationFile {
 		// Definitely cannot have a synthetic default if they have a syntactic default member specified
-		defaultExportSymbol := c.resolveExportByName(moduleSymbol, ast.InternalSymbolNameDefault /*sourceNode*/, nil /*dontResolveAlias*/, true)
-		// Dont resolve alias because we want the immediately exported symbol's declaration
+		defaultExportSymbol := c.resolveExportByName(moduleSymbol, ast.InternalSymbolNameDefault /*sourceNode*/, nil /*dontResolveAlias*/, true) // Dont resolve alias because we want the immediately exported symbol's declaration
 		if defaultExportSymbol != nil && core.Some(defaultExportSymbol.Declarations, isSyntacticDefault) {
 			return false
 		}
@@ -13812,7 +13834,12 @@ func (c *Checker) canHaveSyntheticDefault(file *ast.Node, moduleSymbol *ast.Symb
 		return true
 	}
 	// TypeScript files never have a synthetic default (as they are always emitted with an __esModule marker) _unless_ they contain an export= statement
-	return hasExportAssignmentSymbol(moduleSymbol)
+	if !ast.IsInJSFile(file) {
+		return hasExportAssignmentSymbol(moduleSymbol)
+	}
+
+	// JS files have a synthetic default if they do not contain ES2015+ module syntax (export = is not valid in js) _and_ do not have an __esModule marker
+	return !ast.IsExternalModule(file.AsSourceFile()) && c.resolveExportByName(moduleSymbol, "__esModule", nil /*sourceNode*/, dontResolveAlias) == nil
 }
 
 func (c *Checker) getEmitSyntaxForModuleSpecifierExpression(usage *ast.Node) core.ResolutionMode {
@@ -20255,7 +20282,7 @@ func (c *Checker) instantiateTypeWithAlias(t *Type, m *TypeMapper, alias *TypeAl
 		c.error(c.currentNode, diagnostics.Type_instantiation_is_excessively_deep_and_possibly_infinite)
 		return c.errorType
 	}
-	c.totalInstantiationCount++
+	c.TotalInstantiationCount++
 	c.instantiationCount++
 	c.instantiationDepth++
 	result := c.instantiateTypeWorker(t, m, alias)
@@ -20903,8 +20930,21 @@ func (c *Checker) getTypeFromTypeNode(node *ast.Node) *Type {
 
 func (c *Checker) getTypeFromTypeNodeWorker(node *ast.Node) *Type {
 	switch node.Kind {
-	case ast.KindAnyKeyword:
+	case ast.KindAnyKeyword, ast.KindJSDocAllType:
 		return c.anyType
+	case ast.KindJSDocNonNullableType:
+		return c.getTypeFromTypeNode(node.AsJSDocNonNullableType().Type)
+	case ast.KindJSDocNullableType:
+		t := c.getTypeFromTypeNode(node.AsJSDocNullableType().Type)
+		if c.strictNullChecks {
+			return c.getNullableType(t, TypeFlagsNull)
+		} else {
+			return t
+		}
+	case ast.KindJSDocVariadicType:
+		return c.createArrayType(c.getTypeFromTypeNode(node.AsJSDocVariadicType().Type))
+	case ast.KindJSDocOptionalType:
+		return c.addOptionality(c.getTypeFromTypeNode(node.AsJSDocOptionalType().Type))
 	case ast.KindUnknownKeyword:
 		return c.unknownType
 	case ast.KindStringKeyword:
@@ -23721,6 +23761,10 @@ func (c *Checker) getUnionTypeFromSortedList(types []*Type, precomputedObjectFla
 	return t
 }
 
+func (c *Checker) UnionTypes() iter.Seq[*Type] {
+	return maps.Values(c.unionTypes)
+}
+
 func (c *Checker) addTypesToUnion(typeSet []*Type, includes TypeFlags, types []*Type) ([]*Type, TypeFlags) {
 	var lastType *Type
 	for _, t := range types {
@@ -23762,7 +23806,7 @@ func (c *Checker) addTypeToUnion(typeSet []*Type, includes TypeFlags, t *Type) (
 				includes |= TypeFlagsIncludesNonWideningType
 			}
 		} else {
-			if index, ok := slices.BinarySearchFunc(typeSet, t, compareTypes); !ok {
+			if index, ok := slices.BinarySearchFunc(typeSet, t, CompareTypes); !ok {
 				typeSet = slices.Insert(typeSet, index, t)
 			}
 		}
@@ -24528,12 +24572,12 @@ func (c *Checker) removeType(t *Type, targetType *Type) *Type {
 }
 
 func containsType(types []*Type, t *Type) bool {
-	_, ok := slices.BinarySearchFunc(types, t, compareTypes)
+	_, ok := slices.BinarySearchFunc(types, t, CompareTypes)
 	return ok
 }
 
 func insertType(types []*Type, t *Type) ([]*Type, bool) {
-	if i, ok := slices.BinarySearchFunc(types, t, compareTypes); !ok {
+	if i, ok := slices.BinarySearchFunc(types, t, CompareTypes); !ok {
 		return slices.Insert(types, i, t), true
 	}
 	return types, false

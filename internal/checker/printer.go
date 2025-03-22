@@ -188,6 +188,13 @@ func (p *Printer) printTypeNoAlias(t *Type) {
 	case t.flags&TypeFlagsStringMapping != 0:
 		p.printStringMappingType(t)
 	case t.flags&TypeFlagsSubstitution != 0:
+		if p.c.isNoInferType(t) {
+			if noInferSymbol := p.c.getGlobalNoInferSymbolOrNil(); noInferSymbol != nil {
+				p.printQualifiedName(noInferSymbol)
+				p.printTypeArguments([]*Type{t.AsSubstitutionType().baseType})
+				break
+			}
+		}
 		p.printType(t.AsSubstitutionType().baseType)
 	}
 	p.depth--
@@ -464,6 +471,11 @@ func (p *Printer) printSignature(sig *Signature, returnSeparator string) {
 	}
 	p.print("(")
 	var tail bool
+	if sig.thisParameter != nil {
+		p.print("this: ")
+		p.printType(p.c.getTypeOfSymbol(sig.thisParameter))
+		tail = true
+	}
 	for i, param := range sig.parameters {
 		if tail {
 			p.print(", ")
