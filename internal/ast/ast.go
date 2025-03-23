@@ -8761,6 +8761,9 @@ type SourceFile struct {
 }
 
 func (f *NodeFactory) NewSourceFile(text string, fileName string, path tspath.Path, statements *NodeList) *Node {
+	
+	fileName = strings.ReplaceAll(fileName, "\\", "/")
+	
 	if (tspath.GetEncodedRootLength(fileName) == 0 && !strings.HasPrefix(fileName, "^/")) || fileName != tspath.NormalizePath(fileName) {
 		panic(fmt.Sprintf("fileName should be normalized and absolute: %q", fileName))
 	}

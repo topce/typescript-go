@@ -1468,7 +1468,8 @@ func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature,
 		}
 		return TernaryFalse
 	}
-	if targetHasMoreParameters {
+	 
+	if c.compilerOptions.NoParameterVariance == core.TSTrue && targetHasMoreParameters {
 		if reportErrors && (checkMode&SignatureCheckModeStrictArity == 0) {
 			errorReporter(diagnostics.Source_signature_provides_too_few_arguments_Expected_0_or_more_but_got_1, c.getMinArgumentCount(target), sourceCount)
 		}

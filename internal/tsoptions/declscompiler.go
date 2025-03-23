@@ -633,6 +633,16 @@ var commonOptionsWithBuild = []*CommandLineOption{
 		DefaultValueDescription:    false,
 	},
 	{
+		Name:                       "noParameterVariance",
+		Kind:                       CommandLineOptionTypeBoolean,
+		AffectsSemanticDiagnostics: true,
+		AffectsBuildInfo:           true,
+		ShowInSimplifiedHelpView:   false,
+		Category:                   diagnostics.Type_Checking,
+		Description:                diagnostics.No_parameter_variance,
+		DefaultValueDescription:    false,
+	},
+	{
 		Name:                       "noPropertyAccessFromIndexSignature",
 		Kind:                       CommandLineOptionTypeBoolean,
 		AffectsSemanticDiagnostics: true,

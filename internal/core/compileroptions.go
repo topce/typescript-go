@@ -70,6 +70,7 @@ type CompilerOptions struct {
 	NoImplicitReturns                         Tristate                                  `json:"noImplicitReturns,omitzero"`
 	NoEmitHelpers                             Tristate                                  `json:"noEmitHelpers,omitzero"`
 	NoLib                                     Tristate                                  `json:"noLib,omitzero"`
+	NoParameterVariance                       Tristate                                  `json:"noParameterVariance,omitzero"`
 	NoPropertyAccessFromIndexSignature        Tristate                                  `json:"noPropertyAccessFromIndexSignature,omitzero"`
 	NoUncheckedIndexedAccess                  Tristate                                  `json:"noUncheckedIndexedAccess,omitzero"`
 	NoEmitOnError                             Tristate                                  `json:"noEmitOnError,omitzero"`

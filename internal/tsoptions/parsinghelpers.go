@@ -281,6 +281,8 @@ func ParseCompilerOptions(key string, value any, allOptions *core.CompilerOption
 		allOptions.NoImplicitThis = parseTristate(value)
 	case "noLib":
 		allOptions.NoLib = parseTristate(value)
+	case "noParameterVariance":
+		allOptions.NoParameterVariance = parseTristate(value)
 	case "noPropertyAccessFromIndexSignature":
 		allOptions.NoPropertyAccessFromIndexSignature = parseTristate(value)
 	case "noUncheckedIndexedAccess":

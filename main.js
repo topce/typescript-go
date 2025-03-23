@@ -7,6 +7,8 @@ function handler(arg) {
 function doSomething(callback) {
     callback("hello", 42);
 }
+// Expected error because 'doSomething' wants a callback of
+// 2 parameters, but 'handler' only accepts 1
 doSomething(handler);
 class A {
     hi(a, b, c) {
