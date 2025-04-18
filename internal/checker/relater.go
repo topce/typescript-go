@@ -1464,6 +1464,22 @@ func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature,
 		source = c.instantiateSignatureInContextOf(source, target /*inferenceContext*/, nil, compareTypes)
 	}
 	sourceCount := c.getParameterCount(source)
+	var targetHasMoreParameters bool
+	if !c.hasEffectiveRestParameter(source) {
+		if checkMode&SignatureCheckModeStrictArity != 0 {
+			targetHasMoreParameters = c.hasEffectiveRestParameter(target) || c.getParameterCount(target) > sourceCount
+		} else {
+			targetHasMoreParameters = c.getMinArgumentCount(target) > sourceCount
+		}
+	}
+	if targetHasMoreParameters {
+		if reportErrors && (checkMode&SignatureCheckModeStrictArity == 0) {
+			// the second condition should be redundant, because there is no error reporting when comparing signatures by strict arity
+			// since it is only done for subtype reduction
+			errorReporter(diagnostics.Target_signature_provides_too_few_arguments_Expected_0_or_more_but_got_1, c.getMinArgumentCount(target), sourceCount)
+		}
+		return TernaryFalse
+	}
 	sourceRestType := c.getNonArrayRestType(source)
 	targetRestType := c.getNonArrayRestType(target)
 	if sourceRestType != nil || targetRestType != nil {
