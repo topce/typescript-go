@@ -179,6 +179,7 @@ func getCompilerVaryByMap() map[string]struct{} {
 		// explicit variations that do not match above conditions
 		"noEmit",
 		"isolatedModules",
+		"strictArity",
 	)
 	varyByMap := make(map[string]struct{})
 	for _, option := range varyByOptions {

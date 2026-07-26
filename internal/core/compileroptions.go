@@ -102,6 +102,7 @@ type CompilerOptions struct {
 	StrictBindCallApply                       Tristate                                  `json:"strictBindCallApply,omitzero"`
 	StrictBuiltinIteratorReturn               Tristate                                  `json:"strictBuiltinIteratorReturn,omitzero"`
 	StrictFunctionTypes                       Tristate                                  `json:"strictFunctionTypes,omitzero"`
+	StrictArity                               StrictArity                               `json:"strictArity,omitzero"`
 	StrictNullChecks                          Tristate                                  `json:"strictNullChecks,omitzero"`
 	StrictPropertyInitialization              Tristate                                  `json:"strictPropertyInitialization,omitzero"`
 	StripInternal                             Tristate                                  `json:"stripInternal,omitzero"`

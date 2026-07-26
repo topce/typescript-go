@@ -603,6 +603,7 @@ type Checker struct {
 	emitStandardClassFields                     bool
 	strictNullChecks                            bool
 	strictFunctionTypes                         bool
+	strictArity                                 core.StrictArity
 	strictBindCallApply                         bool
 	strictPropertyInitialization                bool
 	strictBuiltinIteratorReturn                 bool
@@ -917,6 +918,7 @@ func NewChecker(program Program, tracer *Tracer) (*Checker, *sync.Mutex) {
 	c.emitStandardClassFields = c.compilerOptions.GetEmitStandardClassFields()
 	c.strictNullChecks = c.compilerOptions.GetStrictOptionValue(c.compilerOptions.StrictNullChecks)
 	c.strictFunctionTypes = c.compilerOptions.GetStrictOptionValue(c.compilerOptions.StrictFunctionTypes)
+	c.strictArity = c.compilerOptions.StrictArity
 	c.strictBindCallApply = c.compilerOptions.GetStrictOptionValue(c.compilerOptions.StrictBindCallApply)
 	c.strictPropertyInitialization = c.compilerOptions.GetStrictOptionValue(c.compilerOptions.StrictPropertyInitialization)
 	c.strictBuiltinIteratorReturn = c.compilerOptions.GetStrictOptionValue(c.compilerOptions.StrictBuiltinIteratorReturn)

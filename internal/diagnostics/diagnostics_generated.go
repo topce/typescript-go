@@ -4310,6 +4310,8 @@ var Sort_Imports = &Message{code: 100018, category: CategoryMessage, key: "Sort_
 
 var JSDoc_comment = &Message{code: 100019, category: CategoryMessage, key: "JSDoc_comment_100019", text: "JSDoc comment"}
 
+var Apply_strict_parameter_count_checking_to_selected_signature_kinds = &Message{code: 100020, category: CategoryMessage, key: "Apply_strict_parameter_count_checking_to_selected_signature_kinds_100020", text: "Apply strict parameter-count checking to selected signature kinds."}
+
 func keyToMessage(key Key) *Message {
 	switch key {
 	case "Unterminated_string_literal_1002":
@@ -8620,6 +8622,8 @@ func keyToMessage(key Key) *Message {
 		return Sort_Imports
 	case "JSDoc_comment_100019":
 		return JSDoc_comment
+	case "Apply_strict_parameter_count_checking_to_selected_signature_kinds_100020":
+		return Apply_strict_parameter_count_checking_to_selected_signature_kinds
 	default:
 		return nil
 	}

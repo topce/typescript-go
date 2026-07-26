@@ -1,6 +1,7 @@
 package tsoptions
 
 import (
+	"math"
 	"reflect"
 	"strings"
 
@@ -423,6 +424,8 @@ func parseCompilerOptions(key string, value any, allOptions *core.CompilerOption
 		allOptions.StrictBuiltinIteratorReturn = ParseTristate(value)
 	case "strictFunctionTypes":
 		allOptions.StrictFunctionTypes = ParseTristate(value)
+	case "strictArity":
+		allOptions.StrictArity = ParseStrictArity(value)
 	case "strictNullChecks":
 		allOptions.StrictNullChecks = ParseTristate(value)
 	case "strictPropertyInitialization":
@@ -499,6 +502,28 @@ func floatOrInt32ToFlag[T ~int32](value any) T {
 		return v
 	}
 	return T(value.(float64))
+}
+
+// ParseStrictArity converts a value from test/config parsing into a StrictArity bitmap.
+// Accepted formats:
+//   - string "all" → StrictArityAll
+//   - string "none" → StrictArityNone
+//   - comma-separated kind names → OR'd bitmap
+//   - uint16/number → direct bitmap value
+func ParseStrictArity(value any) core.StrictArity {
+	switch v := value.(type) {
+	case string:
+		return core.ParseStrictArity(v)
+	case core.StrictArity:
+		return v
+	case float64:
+		if v < 0 || v > math.MaxUint16 || v != math.Trunc(v) {
+			return core.StrictArityNone
+		}
+		return core.StrictArity(uint16(v))
+	default:
+		return core.StrictArityNone
+	}
 }
 
 func ParseWatchOptions(key string, value any, allOptions *core.WatchOptions) []*ast.Diagnostic {

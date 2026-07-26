@@ -572,6 +572,15 @@ var optionsForCompiler = []*CommandLineOption{
 		DefaultValueDescription:    diagnostics.X_true_unless_strict_is_false,
 	},
 	{
+		Name:                       "strictArity",
+		Kind:                       CommandLineOptionTypeString,
+		AffectsSemanticDiagnostics: true,
+		AffectsBuildInfo:           true,
+		ShowInSimplifiedHelpView:   true,
+		Category:                   diagnostics.Type_Checking,
+		Description:                diagnostics.Apply_strict_parameter_count_checking_to_selected_signature_kinds,
+	},
+	{
 		Name:                       "strictBindCallApply",
 		Kind:                       CommandLineOptionTypeBoolean,
 		AffectsSemanticDiagnostics: true,

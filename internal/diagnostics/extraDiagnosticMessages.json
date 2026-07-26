@@ -130,5 +130,9 @@
     "JSDoc comment": {
         "category": "Message",
         "code": 100019
+    },
+    "Apply strict parameter-count checking to selected signature kinds.": {
+        "category": "Message",
+        "code": 100020
     }
 }

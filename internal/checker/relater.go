@@ -1455,6 +1455,21 @@ func (c *Checker) isSignatureAssignableTo(source *Signature, target *Signature, 
 	return c.compareSignaturesRelated(source, target, core.IfElse(ignoreReturnTypes, SignatureCheckModeIgnoreReturnTypes, SignatureCheckModeNone), false /*reportErrors*/, nil /*errorReporter*/, c.compareTypesAssignable, nil /*reportUnreliableMarkers*/) != TernaryFalse
 }
 
+// shouldUseStrictArity determines whether strict arity checking applies for a given signature kind.
+// - StrictArityNone (default): no strict arity checking.
+// - StrictArityAll: applies strict arity for every defined kind.
+// - Individual flags: applies strict arity only for explicitly configured kinds.
+// Returns true if strict parameter-count checking should apply.
+func (c *Checker) shouldUseStrictArity(kind ast.Kind) bool {
+	if c.strictArity == core.StrictArityNone {
+		return false
+	}
+	if c.strictArity == core.StrictArityAll {
+		return true
+	}
+	return c.strictArity.HasKind(uint16(kind))
+}
+
 func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature, checkMode SignatureCheckMode, reportErrors bool, errorReporter ErrorReporter, compareTypes TypeComparer, reportUnreliableMarkers *TypeMapper) Ternary {
 	if source == target {
 		return TernaryTrue
@@ -1496,6 +1511,26 @@ func (c *Checker) compareSignaturesRelated(source *Signature, target *Signature,
 	if target.declaration != nil {
 		kind = target.declaration.Kind
 	}
+	useStrictCheck := c.shouldUseStrictArity(kind)
+	if useStrictCheck {
+		var sourceHasFewerParameters bool
+		if checkMode&SignatureCheckModeCallback == 0 {
+			if !c.hasEffectiveRestParameter(source) {
+				if checkMode&SignatureCheckModeStrictArity != 0 {
+					sourceHasFewerParameters = c.hasEffectiveRestParameter(target) || sourceCount < targetCount
+				} else {
+					sourceHasFewerParameters = sourceCount < c.getMinArgumentCount(target)
+				}
+			}
+		}
+		if sourceHasFewerParameters {
+			if reportErrors && (checkMode&SignatureCheckModeStrictArity == 0) {
+				errorReporter(diagnostics.Target_signature_provides_too_few_arguments_Expected_0_or_more_but_got_1, sourceCount, c.getMinArgumentCount(target))
+			}
+			return TernaryFalse
+		}
+	}
+
 	strictVariance := checkMode&SignatureCheckModeCallback == 0 && c.strictFunctionTypes && kind != ast.KindMethodDeclaration && kind != ast.KindMethodSignature && kind != ast.KindConstructor
 	result := TernaryTrue
 	sourceThisType := c.getThisTypeOfSignature(source)
