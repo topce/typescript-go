@@ -15,14 +15,14 @@ import {
     type Statement,
     SyntaxKind,
     TokenFlags,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     createArrayLiteralExpression,
     createExpressionStatement,
     createNumericLiteral,
     createSourceFile,
     createToken,
-} from "@typescript/native-preview/unstable/ast/factory";
+} from "@topce/native-preview/unstable/ast/factory";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { Bench } from "tinybench";

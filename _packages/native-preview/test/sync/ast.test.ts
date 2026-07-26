@@ -6,7 +6,7 @@ import type {
     SourceFile,
     StringLiteralLikeNode,
     VariableStatement,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     getTokenAtPosition,
     isImportDeclaration,
@@ -14,11 +14,11 @@ import {
     isValidTypeOnlyAliasUseSite,
     SyntaxKind,
     TokenFlags,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     getSynthesizedDeepClone,
     getSynthesizedDeepClones,
-} from "@typescript/native-preview/unstable/ast/clone";
+} from "@topce/native-preview/unstable/ast/clone";
 import {
     cloneNode,
     createBinaryExpression,
@@ -32,14 +32,14 @@ import {
     createStringLiteral,
     createToken,
     NodeObject,
-} from "@typescript/native-preview/unstable/ast/factory";
+} from "@topce/native-preview/unstable/ast/factory";
 import {
     visitEachChild,
     visitNode,
     visitNodes,
-} from "@typescript/native-preview/unstable/ast/visitor";
-import { createVirtualFileSystem } from "@typescript/native-preview/unstable/fs";
-import { API } from "@typescript/native-preview/unstable/sync";
+} from "@topce/native-preview/unstable/ast/visitor";
+import { createVirtualFileSystem } from "@topce/native-preview/unstable/fs";
+import { API } from "@topce/native-preview/unstable/sync";
 import assert from "node:assert";
 import {
     describe,

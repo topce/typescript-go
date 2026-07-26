@@ -27,7 +27,7 @@ import {
     NodeFlags,
     SyntaxKind,
     unescapeLeadingUnderscores,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     createArrayTypeNode,
     createFunctionTypeNode,
@@ -38,8 +38,8 @@ import {
     createTypeAliasDeclaration,
     createTypeReferenceNode,
     createUnionTypeNode,
-} from "@typescript/native-preview/unstable/ast/factory";
-import { visitEachChild } from "@typescript/native-preview/unstable/ast/visitor";
+} from "@topce/native-preview/unstable/ast/factory";
+import { visitEachChild } from "@topce/native-preview/unstable/ast/visitor";
 import {
     API,
     type BigIntLiteralType,
@@ -69,9 +69,9 @@ import {
     TypePredicateKind,
     type TypeReference,
     type UnionOrIntersectionType,
-} from "@typescript/native-preview/unstable/async"; // @sync: } from "@typescript/native-preview/unstable/sync";
-import { createVirtualFileSystem } from "@typescript/native-preview/unstable/fs";
-import type { FileSystem } from "@typescript/native-preview/unstable/fs";
+} from "@topce/native-preview/unstable/async"; // @sync: } from "@topce/native-preview/unstable/sync";
+import { createVirtualFileSystem } from "@topce/native-preview/unstable/fs";
+import type { FileSystem } from "@topce/native-preview/unstable/fs";
 import assert from "node:assert";
 import { globSync } from "node:fs";
 import { resolve } from "node:path";
@@ -1335,7 +1335,7 @@ export class Cache {
             const sourceFile = await project.program.getSourceFile("/src/main.ts");
             assert.ok(sourceFile);
 
-            let callNode: import("@typescript/native-preview/unstable/ast").CallExpression | undefined;
+            let callNode: import("@topce/native-preview/unstable/ast").CallExpression | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isCallExpression(node)) {
                     const text = sourceFile.text.slice(node.pos, node.end).trim();
@@ -2406,7 +2406,7 @@ foo(42);
             // statement[1] = foo(42); which is an ExpressionStatement -> CallExpression
             const callStmt = sourceFile.statements[1];
             assert.ok(callStmt);
-            let numLiteral: import("@typescript/native-preview/unstable/ast").Expression | undefined;
+            let numLiteral: import("@topce/native-preview/unstable/ast").Expression | undefined;
             callStmt.forEachChild(function visit(node) {
                 if (isCallExpression(node)) {
                     // First argument
@@ -2462,7 +2462,7 @@ export function check(x: string | number) {
             const funcDecl = sourceFile.statements[0];
             assert.ok(funcDecl);
             // Walk to find the first "return x" — inside the if, x should be narrowed to string
-            let firstReturnX: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let firstReturnX: import("@topce/native-preview/unstable/ast").Node | undefined;
             funcDecl.forEachChild(function visit(node) {
                 if (isReturnStatement(node) && !firstReturnX) {
                     // The expression of the return statement is the identifier "x"
@@ -2502,7 +2502,7 @@ export const obj = { name };
 
             // Find the shorthand property assignment { name }
             // statement[1] = export const obj = { name };
-            let shorthandNode: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let shorthandNode: import("@topce/native-preview/unstable/ast").Node | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isShorthandPropertyAssignment(node)) {
                     shorthandNode = node;
@@ -4301,7 +4301,7 @@ describe("Checker - isContextSensitive", () => {
             const sourceFile = await project.program.getSourceFile("/src/main.ts");
             assert.ok(sourceFile);
             // Find the arrow function node
-            let arrowFn: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let arrowFn: import("@topce/native-preview/unstable/ast").Node | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (node.kind === SyntaxKind.ArrowFunction) {
                     arrowFn = node;
@@ -4671,7 +4671,7 @@ export const obj = { m: 1, s: "hi", b: true };
             assert.ok(sourceFile);
 
             // Find the regex literal node
-            let regexNode: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let regexNode: import("@topce/native-preview/unstable/ast").Node | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (node.kind === SyntaxKind.RegularExpressionLiteral) {
                     regexNode = node;
@@ -4779,7 +4779,7 @@ describe("modifierFlags", () => {
             const sourceFile = await project.program.getSourceFile("/src/index.ts");
             assert.ok(sourceFile);
 
-            let fnNode: import("@typescript/native-preview/unstable/ast").FunctionDeclaration | undefined;
+            let fnNode: import("@topce/native-preview/unstable/ast").FunctionDeclaration | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isFunctionDeclaration(node)) {
                     fnNode = node;
@@ -4807,7 +4807,7 @@ describe("modifierFlags", () => {
             const sourceFile = await project.program.getSourceFile("/src/index.ts");
             assert.ok(sourceFile);
 
-            let fnNode: import("@typescript/native-preview/unstable/ast").FunctionDeclaration | undefined;
+            let fnNode: import("@topce/native-preview/unstable/ast").FunctionDeclaration | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isFunctionDeclaration(node)) {
                     fnNode = node;
@@ -4836,7 +4836,7 @@ describe("Checker - getResolvedSymbol", () => {
             assert.ok(sourceFile);
 
             // Find the 'x' identifier in `const y = x`
-            let refNode: import("@typescript/native-preview/unstable/ast").Identifier | undefined;
+            let refNode: import("@topce/native-preview/unstable/ast").Identifier | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isIdentifier(node) && node.text === "x") {
                     // We want the reference, not the declaration - take the last one
@@ -4868,7 +4868,7 @@ describe("VariableDeclarationList - BlockScoped flags", () => {
             const sourceFile = await project.program.getSourceFile("/src/index.ts");
             assert.ok(sourceFile);
 
-            let declList: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let declList: import("@topce/native-preview/unstable/ast").Node | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isVariableDeclarationList(node)) {
                     declList = node;
@@ -4894,7 +4894,7 @@ describe("VariableDeclarationList - BlockScoped flags", () => {
             const sourceFile = await project.program.getSourceFile("/src/index.ts");
             assert.ok(sourceFile);
 
-            let declList: import("@typescript/native-preview/unstable/ast").Node | undefined;
+            let declList: import("@topce/native-preview/unstable/ast").Node | undefined;
             sourceFile.forEachChild(function visit(node) {
                 if (isVariableDeclarationList(node)) {
                     declList = node;
@@ -4920,9 +4920,9 @@ test("TypeOperator operator kind", async () => {
         const project = snapshot.getProject("/tsconfig.json")!;
         const sourceFile = await project.program.getSourceFile("/src/index.ts");
         assert(sourceFile);
-        const param = (sourceFile.statements[0] as import("@typescript/native-preview/unstable/ast").FunctionDeclaration).parameters[0];
+        const param = (sourceFile.statements[0] as import("@topce/native-preview/unstable/ast").FunctionDeclaration).parameters[0];
         assert(param);
-        const type = param.type as import("@typescript/native-preview/unstable/ast").TypeOperatorNode;
+        const type = param.type as import("@topce/native-preview/unstable/ast").TypeOperatorNode;
         assert(type);
         assert.equal(type.kind, SyntaxKind.TypeOperator);
         assert.equal(type.operator, SyntaxKind.ReadonlyKeyword);
@@ -4944,9 +4944,9 @@ test("SpreadAssignment roundtrip", async () => {
         const project = snapshot.getProject("/tsconfig.json")!;
         const sourceFile = await project.program.getSourceFile("/src/index.ts");
         assert(sourceFile);
-        const stmt = sourceFile.statements[0] as import("@typescript/native-preview/unstable/ast").VariableStatement;
-        const object = stmt.declarationList.declarations[0].initializer as import("@typescript/native-preview/unstable/ast").ObjectLiteralExpression;
-        const assignment = object.properties[0] as import("@typescript/native-preview/unstable/ast").SpreadAssignment;
+        const stmt = sourceFile.statements[0] as import("@topce/native-preview/unstable/ast").VariableStatement;
+        const object = stmt.declarationList.declarations[0].initializer as import("@topce/native-preview/unstable/ast").ObjectLiteralExpression;
+        const assignment = object.properties[0] as import("@topce/native-preview/unstable/ast").SpreadAssignment;
         assert(assignment);
         assert.equal(assignment.kind, SyntaxKind.SpreadAssignment);
         const expr = assignment.expression;
@@ -4971,13 +4971,13 @@ test("VariableDeclarationList const flag clone", async () => {
         const sourceFile = await project.program.getSourceFile("/src/index.ts");
         assert(sourceFile);
         {
-            const stmt = sourceFile.statements[0] as import("@typescript/native-preview/unstable/ast").VariableStatement;
+            const stmt = sourceFile.statements[0] as import("@topce/native-preview/unstable/ast").VariableStatement;
             const list = stmt.declarationList;
             assert(list.flags & NodeFlags.Const);
         }
         const cloned = getSynthesizedDeepClone(sourceFile);
         {
-            const stmt = cloned.statements[0] as import("@typescript/native-preview/unstable/ast").VariableStatement;
+            const stmt = cloned.statements[0] as import("@topce/native-preview/unstable/ast").VariableStatement;
             const list = stmt.declarationList;
             assert(list.flags & NodeFlags.Const);
         }

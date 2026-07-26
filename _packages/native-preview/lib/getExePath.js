@@ -34,7 +34,7 @@ export default function getExePath() {
     }
     else {
         // We're actually running from an installed package.
-        const platformPackageName = "@typescript/" + expectedPackage;
+        const platformPackageName = "@topce/" + expectedPackage;
         try {
             if (typeof import.meta.resolve === "undefined") {
                 // v16.20.1

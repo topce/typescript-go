@@ -87,10 +87,10 @@ const options = /** @type {Options} */ (rawOptions);
 
 // Native release branches can edit these constants to publish a fixed stable version.
 // Main publishes prerelease builds of the TypeScript package.
-const nativePreviewReleaseProfile = /** @type {"native-preview" | "typescript"} */ ("typescript");
-const nativePreviewReleaseVersion = /** @type {string | undefined} */ (undefined);
+const nativePreviewReleaseProfile = /** @type {"native-preview" | "typescript"} */ ("native-preview");
+const nativePreviewReleaseVersion = /** @type {string | undefined} */ ("7.0.3");
 const produceNativePreviewVsix = /** @type {boolean} */ (false);
-const produceTypeScriptNightlyVsix = /** @type {boolean} */ (true);
+const produceTypeScriptNightlyVsix = /** @type {boolean} */ (false);
 const usePublishedPlatformPackagesForVsix = /** @type {boolean} */ (false);
 const produceAnyVsix = produceNativePreviewVsix || produceTypeScriptNightlyVsix;
 const publishAsTypescript = nativePreviewReleaseProfile === "typescript";
@@ -796,7 +796,7 @@ async function runTestTools() {
 }
 
 async function runTestAPI() {
-    await $`npm run -w @typescript/native-preview test:only`;
+    await $`npm run -w @topce/native-preview test:only`;
 }
 
 export const testTools = task({
@@ -807,23 +807,23 @@ export const testTools = task({
 
 export const buildAPI = task({
     name: "build:api",
-    description: "Builds @typescript/native-preview JS API.",
+    description: "Builds @topce/native-preview JS API.",
     run: async () => {
-        await $`npm run -w @typescript/native-preview build`;
+        await $`npm run -w @topce/native-preview build`;
     },
 });
 
 export const buildAPITests = task({
     name: "build:api:test",
-    description: "Builds the @typescript/native-preview JS API tests.",
+    description: "Builds the @topce/native-preview JS API tests.",
     run: async () => {
-        await $`npm run -w @typescript/native-preview build:test`;
+        await $`npm run -w @topce/native-preview build:test`;
     },
 });
 
 export const testAPI = task({
     name: "test:api",
-    description: "Runs the @typescript/native-preview JS API tests.",
+    description: "Runs the @topce/native-preview JS API tests.",
     dependencies: [tsgo, buildAPITests],
     run: runTestAPI,
 });
@@ -1480,7 +1480,7 @@ function cpWithoutNodeModulesOrTsconfig(src, dest) {
 }
 
 const mainNativePreviewPackage = {
-    npmPackageName: publishAsTypescript ? "typescript" : "@typescript/native-preview",
+    npmPackageName: publishAsTypescript ? "typescript" : "@topce/native-preview",
     npmDir: path.join(builtNpm, publishAsTypescript ? "typescript" : "native-preview"),
     npmTarball: path.join(builtNpm, publishAsTypescript ? "typescript.tgz" : "native-preview.tgz"),
 };
@@ -1621,7 +1621,7 @@ const getPlatforms = memoize(() => {
         const npmDirName = `${packageBaseName}-${os}-${arch}`;
         const npmDir = path.join(builtNpm, npmDirName);
         const npmTarball = `${npmDir}.tgz`;
-        const npmPackageName = `@typescript/${npmDirName}`;
+        const npmPackageName = `@topce/${npmDirName}`;
 
         /** @type {VsixExtension[]} */
         let extensions = [];
@@ -1886,7 +1886,7 @@ async function runBuildNativePreviewPackages() {
     await fs.promises.copyFile("NOTICE.txt", path.join(mainPackageDir, "NOTICE.txt"));
 
     // Build JS API and copy dist into the package.
-    await $`npm run -w @typescript/native-preview build`;
+    await $`npm run -w @topce/native-preview build`;
     await cpRecursive(path.join(inputDir, "dist"), path.join(mainPackageDir, "dist"));
 
     // Validate that .d.ts files contain no external imports (all imports must start with "." or "#").

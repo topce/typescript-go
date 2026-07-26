@@ -2,11 +2,11 @@ import type {
     Path,
     SourceFile,
     Statement,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     SyntaxKind,
     TokenFlags,
-} from "@typescript/native-preview/unstable/ast";
+} from "@topce/native-preview/unstable/ast";
 import {
     createArrayLiteralExpression,
     createBlock,
@@ -26,7 +26,7 @@ import {
     createVariableDeclaration,
     createVariableDeclarationList,
     createVariableStatement,
-} from "@typescript/native-preview/unstable/ast/factory";
+} from "@topce/native-preview/unstable/ast/factory";
 import assert from "node:assert";
 import {
     describe,
